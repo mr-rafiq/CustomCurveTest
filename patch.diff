@@ -1,0 +1,444 @@
+diff --git a/CustomCurve.cs b/CustomCurve.cs
+index 1bb3e0f..ef785a9 100644
+--- a/CustomCurve.cs
++++ b/CustomCurve.cs
+@@ -13,12 +13,17 @@ using System.Threading.Tasks;
+ 
+ namespace CustomCurveTest
+ {
+-   public  class CustomCurve : CustomCurveObject
++    public class CustomCurve : CustomCurveObject
+     {
+ 
+         //    public MyPoint(){}
+-       public  ObjectAttributes attributes { get; set; }
+-       public Point3d[] m_active{ get; set; }
++        public override ObjectAttributes Attributes { get; set; }
++        public Point3d[] m_active { get; set; }
++
++        public override GeometryBase Geometry { get { return this.geom(new PolylineCurve(m_active)); } }
++
++        private CSGripEnabler m_grip_enabler;
++
+         public CustomCurve() : base() { }
+         public CustomCurve(Point3d[] m_active, ObjectAttributes attributes) : base()
+         {
+@@ -39,11 +44,15 @@ namespace CustomCurveTest
+         protected override void OnAddToDocument(RhinoDoc doc)
+         {
+ 
+-            this.Attributes = this.attributes;
+-            RhinoApp.WriteLine("OnAddToDocument Rhino");
++            RhinoApp.WriteLine("CustomCurve OnAddToDocument Rhino");
+             Curve cr = new PolylineCurve(this.m_active);
+-
+             //doc.Objects.AddRhinoObject(this, cr);
++            CSUserData cd = new CSUserData() { BaseCurve = base.CurveGeometry, Name = "CUstomCurve" };
++            base.Attributes.UserData.Add(cd);
++
++
++            //doc.Objects.Delete(this);
++            //doc.Objects.Add(this.Geometry);
+             doc.Views.Redraw();
+             //base.OnAddToDocument(doc);
+ 
+@@ -53,27 +62,68 @@ namespace CustomCurveTest
+ 
+         protected override void OnSelectionChanged()
+         {
+-            RhinoApp.WriteLine("OnSelectionChanged");
+-            //if (IsSelected(false) == 2)
+-            //{
+-            //    this.GripsOn = true;
+-            //    this.Document.Views.Redraw();
+-            //}
+-            
++            RhinoApp.WriteLine("CustomCurve OnSelectionChanged");
++            Enablegrip();
+             base.OnSelectionChanged();
+         }
+-        protected override void OnDuplicate(RhinoObject source)
++
++
++        public void Enablegrip()
+         {
+-            RhinoApp.WriteLine("OnDuplicate");
+-            base.OnDuplicate(source);
++            if (null == this.m_grip_enabler)
++            {
++                // Register once and only once...
++                this.m_grip_enabler = new CSGripEnabler();
++                CustomObjectGrips.RegisterGripsEnabler(m_grip_enabler.TurnOnGrips, typeof(CSGrips));
++            }
++
++            List<RhinoObject> rh_object = this.Document.Objects.GetSelectedObjects(false, false).ToList();
++            if (rh_object.Count == 1)
++            {
++                if (rh_object[0].GripsOn)
++                    rh_object[0].GripsOn = false;
++
++                m_grip_enabler.TurnOnGrips(rh_object[0]);
++                this.Document.Views.Redraw();
++            }
++            if (rh_object == null || rh_object.Count > 1)
++            {
++                if (rh_object[0].GripsOn)
++                    rh_object[0].GripsOn = false;
++            }
++        }
++
+ 
++        public GeometryBase geom(Curve curve)
++        {
++            List<Curve> crvs = new List<Curve>();
++
++                Curve crv = curve;
++                var off = crv.Offset(Plane.WorldXY, -2, this.Document.ModelAbsoluteTolerance, CurveOffsetCornerStyle.Sharp);
++                var off1 = crv.Offset(Plane.WorldXY, 2, this.Document.ModelAbsoluteTolerance, CurveOffsetCornerStyle.Sharp);
++                Line l1 = new Line(off[0].PointAtStart, off1[0].PointAtStart);
++                Line l2 = new Line(off[0].PointAtEnd, off1[0].PointAtEnd);
++                crvs.Add(off[0]);
++                crvs.Add(l1.ToNurbsCurve());
++                crvs.Add(l2.ToNurbsCurve());
++                crvs.Add(off1[0]);
++                var join = Curve.JoinCurves(crvs);
++                return join[0];
++            
++            //return base.CurveGeometry;
+         }
+ 
+ 
++        protected override void OnDuplicate(RhinoObject source)
++        {
++            RhinoApp.WriteLine("CustomCurve OnDuplicate");
++            base.OnDuplicate(source);
++
++        }
+ 
+         protected override void OnSpaceMorph(SpaceMorph morph)
+         {
+-            RhinoApp.WriteLine("OnSpaceMorph");
++            RhinoApp.WriteLine("CustomCurve OnSpaceMorph");
+             base.OnSpaceMorph(morph);
+             //this.GripsOn = true;
+         }
+@@ -84,7 +134,7 @@ namespace CustomCurveTest
+ 
+         protected override void OnTransform(Transform transform)
+         {
+-            RhinoApp.WriteLine("OnTransform");
++            RhinoApp.WriteLine("CustomCurve OnTransform");
+             base.OnTransform(transform);
+         }
+ 
+@@ -92,16 +142,15 @@ namespace CustomCurveTest
+         {
+ 
+             base.OnDeleteFromDocument(doc);
+-            RhinoApp.WriteLine("OnDeleteFromDocument");
++            RhinoApp.WriteLine("CustomCurve OnDeleteFromDocument");
+ 
+         }
+         protected override void OnDraw(DrawEventArgs e)
+         {
+-            //      e.Display.DrawCircle(new Circle(this.PointGeometry.Location, 10.0), Color.Crimson);
+-            System.Drawing.Color color = this.Attributes.DrawColor(e.RhinoDoc);
+-            var off = this.CurveGeometry.Offset(Plane.WorldXY, 10, 0.001, CurveOffsetCornerStyle.Sharp);
+-            e.Display.DrawCurve(off[0], System.Drawing.Color.Red);
+-            //this.GripsOn = true;
++            System.Drawing.Color color = base.Attributes.DrawColor(e.RhinoDoc);
++            PolylineCurve pl = new PolylineCurve(m_active);
++            GeometryBase off = geom(pl);
++            e.Display.DrawCurve(off as Curve, System.Drawing.Color.Red);
+             base.OnDraw(e);
+         }
+ 
+diff --git a/CustomCurveTestPlugin.cs b/CustomCurveTestPlugin.cs
+index 95f6648..9f5742f 100644
+--- a/CustomCurveTestPlugin.cs
++++ b/CustomCurveTestPlugin.cs
+@@ -1,5 +1,9 @@
+ ﻿using Rhino;
++using Rhino.PlugIns;
+ using System;
++using Rhino.Geometry;
++using System.Collections.Generic;
++using Rhino.DocObjects;
+ 
+ namespace CustomCurveTest
+ {
+@@ -24,5 +28,71 @@ namespace CustomCurveTest
+         // You can override methods here to change the plug-in behavior on
+         // loading and shut down, add options pages to the Rhino _Option command
+         // and maintain plug-in wide options in a document.
++        protected override LoadReturnCode OnLoad(ref string errorMessage)
++        {
++            RhinoDoc.AddRhinoObject += OnAddRhinoObject;
++            RhinoDoc.ReplaceRhinoObject += OnReplaceRhinoObject;
++            RhinoDoc.DeleteRhinoObject += OnDeleteRhinoObject;
++            return LoadReturnCode.Success;
++
++        }
++        public static void OnAddRhinoObject(object sender, Rhino.DocObjects.RhinoObjectEventArgs e)
++        {
++            RhinoApp.WriteLine("> AddRhinoObject ({0})", e.ObjectId);
++
++        }
++
++        public static void OnReplaceRhinoObject(object sender, Rhino.DocObjects.RhinoReplaceObjectEventArgs e)
++        {
++            RhinoApp.WriteLine("> ReplaceRhinoObject ({0})", e.ObjectId);
++            RhinoApp.WriteLine("     UndoActive = {0}", e.Document.UndoActive);
++            RhinoApp.WriteLine("     RedoActive = {0}", e.Document.RedoActive);
++            var obj1 = e.OldRhinoObject;
++            ObjectAttributes objectAttribute = obj1.Attributes.Duplicate();
++            var obj2 = e.NewRhinoObject;
++            CSUserData ud = (CSUserData)obj2.Attributes.UserData.Find(typeof(CSUserData));
++            if(ud != null)
++            {
++                var doc = e.Document;
++                List<Point3d> pts = GetDiscontiuityPoints(obj2.Geometry as Curve);
++                CustomCurve cs = new CustomCurve(pts.ToArray(), objectAttribute);
++                doc.Objects.AddRhinoObject(cs, new PolylineCurve(pts));
++                doc.Objects.Delete(e.OldRhinoObject);
++                doc.Objects.Delete(e.NewRhinoObject);
++
++
++
++            }
++        }
++
++        public static void OnDeleteRhinoObject(object sender, Rhino.DocObjects.RhinoObjectEventArgs e)
++        {
++            RhinoApp.WriteLine("> DeleteRhinoObject ({0})", e.ObjectId);
++        }
++        public static List<double> GetDiscontinuityParams(Curve c)
++        {
++            List<double> parameter = new List<double>();
++            parameter.Add(c.Domain.Min);
++            double st = c.Domain.Min;
++            while (st >= 0)
++            {
++                double t = 0;
++                c.GetNextDiscontinuity(Continuity.C2_continuous, st, c.Domain.Max, out t);
++                if (t < 0) { break; }
++                st = t;
++                parameter.Add(t);
++            }
++            parameter.Add(c.Domain.Max);
++            return parameter;
++        }
++
++
++        public static List<Point3d> GetDiscontiuityPoints(Curve c)
++        {
++            List<double> param = GetDiscontinuityParams(c);
++            List<Point3d> points = new List<Point3d>();
++            param.ForEach(x => points.Add(c.PointAt(x)));
++            return points;
++        }
+     }
+ }
+\ No newline at end of file
+diff --git a/Grip/CSGripEnabler.cs b/Grip/CSGripEnabler.cs
+index c6fc1e4..41cdef9 100644
+--- a/Grip/CSGripEnabler.cs
++++ b/Grip/CSGripEnabler.cs
+@@ -7,7 +7,7 @@ using System.Linq;
+ using System.Text;
+ using System.Threading.Tasks;
+ 
+-namespace CustomRhinoObjects
++namespace CustomCurveTest
+ {
+     public class CSGripEnabler
+     {
+@@ -25,13 +25,17 @@ namespace CustomRhinoObjects
+             //PolylineCurve polyline_curve = ud.BaseCurve.ToPolyline(0.001,0.001,ud.BaseCurve.Domain.Min,ud.BaseCurve.Domain.Max);
+             //if (polyline_curve == null)
+             //    return;
++            if(typeof(CustomCurve) == rhObject.GetType())
++            {
++                CustomCurve obj = (CustomCurve)rhObject;
++                PolylineCurve pl = new PolylineCurve(obj.m_active); 
++                CSGrips rectangle_grips = new CSGrips();
++                if (!rectangle_grips.CreateGrips(pl))
++                    return;
+ 
++                rhObject.EnableCustomGrips(rectangle_grips);
++            }
+ 
+-            CSGrips rectangle_grips = new CSGrips();
+-            if (!rectangle_grips.CreateGrips(rhObject.Geometry as PolylineCurve))
+-                return;
+-
+-            rhObject.EnableCustomGrips(rectangle_grips);
+         }
+ 
+     }
+diff --git a/Grip/CSGripObject.cs b/Grip/CSGripObject.cs
+index 51c4632..7c158cc 100644
+--- a/Grip/CSGripObject.cs
++++ b/Grip/CSGripObject.cs
+@@ -5,7 +5,7 @@ using System.Linq;
+ using System.Text;
+ using System.Threading.Tasks;
+ 
+-namespace CustomRhinoObjects
++namespace CustomCurveTest
+ {
+     public class CSGripObject : CustomGripObject
+     {
+diff --git a/Grip/CSGrips.cs b/Grip/CSGrips.cs
+index 46eab1d..2b4c709 100644
+--- a/Grip/CSGrips.cs
++++ b/Grip/CSGrips.cs
+@@ -9,15 +9,14 @@ using System.Linq;
+ using System.Text;
+ using System.Threading.Tasks;
+ 
+-namespace CustomRhinoObjects
++namespace CustomCurveTest
+ {
+     public class CSGrips : CustomObjectGrips
+     {
+ 
+         private CSGripObject[] cs_polylinegrip;
+         private Point3d[] m_active;
+-        private Point3d[] m_original;
+-        public ObjectAttributes abs { get; set; }
++        private Plane m_plane;
+         /// <summary>
+         /// Constructor
+         /// </summary>
+@@ -33,7 +32,7 @@ namespace CustomRhinoObjects
+         /// </summary>
+         public bool CreateGrips(PolylineCurve polylineCurve)
+         {
+-
++            polylineCurve.TryGetPlane(out this.m_plane);
+             List<Point3d> pts = GetDiscontiuityPoints(polylineCurve);
+ 
+  
+@@ -41,22 +40,46 @@ namespace CustomRhinoObjects
+           
+             cs_polylinegrip = new CSGripObject[pts.Count];
+             m_active = new Point3d[pts.Count];
+-            m_original = new Point3d[pts.Count];
+-            for (int i = 0; i < pts.Count; i++)
++            for (int i = 0; i < m_active.Length; i++)
+             {
+ 
+                 cs_polylinegrip[i].OriginalLocation = pts[i];
+                 m_active[i] = pts[i];
+-
++                cs_polylinegrip[i] = new CSGripObject();
++                cs_polylinegrip[i].OriginalLocation = m_active[i];
+                 cs_polylinegrip[i].Active = true;
+                 AddGrip(cs_polylinegrip[i]);
+             }
+-            Array.Copy(m_active, m_original, pts.Count);
++            RhinoApp.WriteLine("CSGrips CreateGrips");
++            return true;
++        }
+ 
+ 
+-            return true;
++        private void UpdateGrips()
++        {
++            if (NewLocation)
++            {
++                var world_to_plane = Transform.ChangeBasis(Plane.WorldXY, m_plane);
++
++
++                for (var i = 0; i < m_active.Length; i++)
++                {
++                    if (cs_polylinegrip[i].Active && cs_polylinegrip[i].Moved)
++                    {
++                        Point pt = (Point)cs_polylinegrip[i].Geometry;
++                        m_active[i] = new Point3d(pt.Location);
++                    }
++
++                }
++
++                RhinoApp.WriteLine("CSGrips UpdateGrips");
++                NewLocation = false;
++
++            }
+         }
+-        public  List<double> GetDiscontinuityParams(Curve c)
++
++
++        public List<double> GetDiscontinuityParams(Curve c)
+         {
+             List<double> parameter = new List<double>();
+             parameter.Add(c.Domain.Min);
+@@ -74,7 +97,7 @@ namespace CustomRhinoObjects
+         }
+ 
+ 
+-        public  List<Point3d> GetDiscontiuityPoints(Curve c)
++        public List<Point3d> GetDiscontiuityPoints(Curve c)
+         {
+             List<double> param = GetDiscontinuityParams(c);
+             List<Point3d> points = new List<Point3d>();
+@@ -84,8 +107,7 @@ namespace CustomRhinoObjects
+ 
+         protected override void OnReset()
+         {
+-            Array.Copy(m_original, m_active, m_active.Length);
+-            RhinoApp.WriteLine("Onreset");
++            RhinoApp.WriteLine("CSGrips Onreset");
+             base.OnReset();
+         }
+ 
+@@ -94,12 +116,18 @@ namespace CustomRhinoObjects
+         /// </summary>
+         protected override GeometryBase NewGeometry()
+         {
+-            RhinoApp.WriteLine("NewGeometry");
+-            CustomCurve cs = new CustomCurve(m_active,this.abs);
++            RhinoApp.WriteLine("CSGrips NewGeometry");
+             //UpdateGrips();
+-            
++            UpdateGrips();
+             if (GripsMoved)
+-                return cs.Geometry;
++            {
++                ObjectAttributes ob;
++                ob = base.OwnerObject.Attributes.Duplicate();
++                CustomCurve cs = new CustomCurve(this.m_active, ob);
++                PolylineCurve pl = new PolylineCurve(m_active);
++                return pl;
++            }
++            RhinoApp.WriteLine("CSGrips NullGeometry");
+ 
+             return null;
+         }
+@@ -109,9 +137,23 @@ namespace CustomRhinoObjects
+         /// </summary>
+         protected override void OnDraw(GripsDrawEventArgs args)
+         {
+-            RhinoApp.WriteLine("OnDraw");
+-
+-
++            RhinoApp.WriteLine("CSGrips OnDraw");
++            UpdateGrips();
++            if (args.DrawDynamicStuff)
++            {
++                for (var i = 01; i < cs_polylinegrip.Length - 1; i++)
++                {
++                    if (cs_polylinegrip[i].Active && cs_polylinegrip[i].Moved)
++                    {
++                        var start = (i ==0) ? 0 : i-1;
++                        var end = cs_polylinegrip.Length - 1;
++
++                        args.DrawControlPolygonLine(cs_polylinegrip[start].CurrentLocation, cs_polylinegrip[end].CurrentLocation, start, end);
++                        //args.dr
++                    }
++
++                }
++            }
+             base.OnDraw(args);
+         }
+     }
