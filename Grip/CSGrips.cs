@@ -134,14 +134,29 @@ namespace CustomCurveTest
             UpdateGrips();
             if (args.DrawDynamicStuff)
             {
-                for (var i = 01; i < cs_polylinegrip.Length - 1; i++)
-                {
-                    if (cs_polylinegrip[i].Active && cs_polylinegrip[i].Moved)
-                    {
-                        var start = (i ==0) ? 0 : i-1;
-                        var end = cs_polylinegrip.Length - 1;
+                //for (var i = 0; i < cs_polylinegrip.Length - 1; i++)
+                //{
+                //    if (cs_polylinegrip[i].Active && cs_polylinegrip[i].Moved)
+                //    {
 
-                        args.DrawControlPolygonLine(cs_polylinegrip[start].CurrentLocation, cs_polylinegrip[end].CurrentLocation, start, end);
+                //        var start = (i == 0) ? 0 : i - 1;
+                //        var end = i;
+                //        var pt1 = cs_polylinegrip[end].OriginalLocation;
+                //        Line ln = new Line(cs_polylinegrip[start].CurrentLocation, pt1);
+                //        args.DrawControlPolygonLine(ln,  start, start);
+                //        //args.dr
+                //    }
+
+                //}
+                foreach (var item in cs_polylinegrip)
+                {
+                    if (item.Active && item.Moved)
+                    {
+                        var pt1 = item.OriginalLocation;
+                        Line ln = new Line(item.CurrentLocation, pt1);
+
+
+                        args.DrawControlPolygonLine(ln, 0, 0);
                         //args.dr
                     }
 

@@ -51,7 +51,7 @@ namespace CustomCurveTest
             ObjectAttributes objectAttribute = obj1.Attributes.Duplicate();
             var obj2 = e.NewRhinoObject;
             CSUserData ud = (CSUserData)obj2.Attributes.UserData.Find(typeof(CSUserData));
-            if(ud != null)
+            if (ud != null)
             {
                 var doc = e.Document;
                 List<Point3d> pts = GetDiscontiuityPoints(obj2.Geometry as Curve);
